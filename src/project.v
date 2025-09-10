@@ -1,15 +1,16 @@
 `default_nettype none
 
 module tt_um_vga_example(
-    input  wire [7:0] ui_in,      // Dedizierte Eingänge
-    output wire [7:0] uo_out,     // Dedizierte Ausgänge
-    input  wire [7:0] uio_in,     // I/Os: Eingangspfad
-    output wire [7:0] uio_out,    // I/Os: Ausgangspfad
-    output wire [7:0] uio_oe,     // I/Os: Enable-Pfad (aktiv hoch: 0=Eingang, 1=Ausgang)
-    input  wire       ena,        // immer 1, wenn das Design versorgt ist, kann ignoriert werden
-    input  wire       clk,        // Takt
-    input  wire       rst_n       // reset_n - niedrig zum Zurücksetzen
+    input wire [7:0] ui_in, // Dedizierte Eingänge
+    output wire [7:0] uo_out, // Dedizierte Ausgänge
+    input wire [7:0] uio_in, // IOs: Eingangs-Pfad
+    output wire [7:0] uio_out, // IOs: Ausgangs-Pfad
+    output wire [7:0] uio_oe, // IOs: Enable-Pfad (aktiv High: 0=Eingang, 1=Ausgang)
+    input wire ena, // immer 1, solange das Design mit Strom versorgt ist - kann ignoriert werden
+    input wire clk, // Takt
+    input wire rst_n // reset_n - Low = Reset
 );
+
     // VGA-Signale
     wire hsync;
     wire vsync;
@@ -23,27 +24,14 @@ module tt_um_vga_example(
     // TinyVGA PMOD
     assign uo_out = {hsync, B[0], G[0], R[0], vsync, B[1], G[1], R[1]};
 
-    // Unbenutzte Ausgänge werden auf 0 gesetzt.
+    // Ungenutzte Ausgänge auf 0 gesetzt
     assign uio_out = 0;
-    assign uio_oe  = 0;
+    assign uio_oe = 0;
 
-    // Unterdrückung von Warnungen für unbenutzte Signale
+    // Suppress unused signals warning
     wire _unused_ok = &{ena, ui_in, uio_in};
 
-    // Definition des roten Rechtecks
-    localparam RECT_X_START = 100;
-    localparam RECT_Y_START = 100;
-    localparam RECT_WIDTH   = 200;
-    localparam RECT_HEIGHT  = 150;
-
-    wire inside_rectangle = (pix_x >= RECT_X_START) && (pix_x < RECT_X_START + RECT_WIDTH) &&
-                            (pix_y >= RECT_Y_START) && (pix_y < RECT_Y_START + RECT_HEIGHT);
-
-    assign R = video_active && inside_rectangle ? 2'b11 : 2'b00; // Rote Farbe
-    assign G = 2'b00; // Kein Grün
-    assign B = 2'b00; // Kein Blau
-
-    // In-Stand-Setzen des VGA-Signalgenerators
+    // VGA-Signalgenerator
     hvsync_generator hvsync_gen(
         .clk(clk),
         .reset(~rst_n),
@@ -53,4 +41,10 @@ module tt_um_vga_example(
         .hpos(pix_x),
         .vpos(pix_y)
     );
+
+    // Definiere ein blaues Rechteck
+    assign R = (pix_x >= 100 && pix_x < 200 && pix_y >= 100 && pix_y < 200) ? 2'b00 : 2'b00; // Kein Rot
+    assign G = (pix_x >= 100 && pix_x < 200 && pix_y >= 100 && pix_y < 200) ? 2'b00 : 2'b00; // Kein Grün
+    assign B = (pix_x >= 100 && pix_x < 200 && pix_y >= 100 && pix_y < 200) ? 2'b11 : 2'b00; // Voll Blau
+
 endmodule

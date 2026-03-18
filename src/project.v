@@ -5,7 +5,7 @@
 
 `default_nettype none
 
-module tt_um_vga_red_car(
+module tt_um_vga_example(
     input wire [7:0] ui_in, // Dedizierte Eingänge
     output wire [7:0] uo_out, // Dedizierte Ausgänge
     input wire [7:0] uio_in, // IOs: Eingangs-Pfad

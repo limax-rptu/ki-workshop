@@ -1,14 +1,19 @@
+/*
+* Copyright (c) 2025, RPTU Kaiserslautern-Landau
+* SPDX-License-Identifier: Apache-2.0
+*/
+
 `default_nettype none
 
-module tt_um_vga_example(
-    input wire [7:0] ui_in,    // Dedizierte Eingänge
-    output wire [7:0] uo_out,  // Dedizierte Ausgänge
-    input wire [7:0] uio_in,   // Allgemeine I/Os: Eingangs-Pfad
-    output wire [7:0] uio_out, // Allgemeine I/Os: Ausgangs-Pfad
-    output wire [7:0] uio_oe,  // Allgemeine I/Os: Enable-Pfad
-    input wire ena,            // immer High, ignorierbar
-    input wire clk,            // Takt
-    input wire rst_n           // Aktives Low-Reset
+module tt_um_vga_red_car(
+    input wire [7:0] ui_in, // Dedizierte Eingänge
+    output wire [7:0] uo_out, // Dedizierte Ausgänge
+    input wire [7:0] uio_in, // IOs: Eingangs-Pfad
+    output wire [7:0] uio_out, // IOs: Ausgangs-Pfad
+    output wire [7:0] uio_oe, // IOs: Enable-Pfad (aktiv High: 0=Eingang, 1=Ausgang)
+    input wire ena, // immer 1, solange das Design mit Strom versorgt ist - kann ignoriert werden
+    input wire clk, // Takt
+    input wire rst_n // reset_n - Low = Reset
 );
 
     // VGA-Signale definieren
@@ -21,14 +26,21 @@ module tt_um_vga_example(
     wire [9:0] pix_x;
     wire [9:0] pix_y;
 
-    // TinyVGA PMOD
+    // Bewegungssignale und Zähler für die Geschwindigkeit
+    reg [9:0] car_pos_x; // Aktuelle X-Position der linken oberen Ecke des Autos
+    reg [20:0] speed_counter; // Zähler für die Geschwindigkeit
+
+    // VGA-Ausgänge zuweisen
     assign uo_out = {hsync, B[0], G[0], R[0], vsync, B[1], G[1], R[1]};
 
     // Ungenutzte Ausgänge auf 0 setzen
     assign uio_out = 0;
     assign uio_oe  = 0;
 
-    // VGA-Signalgenerator instanziieren 
+    // Unterdrücke Warnungen für ungenutzte Signale
+    wire _unused_ok = &{ena, uio_in};
+
+    // VGA-Signalgenerator-Modul instanziieren
     hvsync_generator hvsync_gen(
         .clk(clk),
         .reset(~rst_n),
@@ -39,52 +51,38 @@ module tt_um_vga_example(
         .vpos(pix_y)
     );
 
-    // Zeichne den Umriss der Katze
-    wire cat_outline;
-    assign cat_outline = (
-        ((pix_y == 100) && (pix_x >= 150 && pix_x <= 300)) || // Oberkopf 
-        ((pix_y >= 101 && pix_y <= 200) && (pix_x == 150 || pix_x == 300)) || // Seiten des Kopfes 
-        ((pix_y == 200) && (pix_x >= 150 && pix_x <= 300)) || // Unterer Kopf 
-        ((pix_y >= 50 && pix_y <= 100) && (pix_x == 175 || pix_x == 275))   // Ohren 
-    );
+    // Steuerung der Autobewegung
+    always @(posedge clk) begin
+        if (~rst_n) begin
+            car_pos_x <= 10'd100; // Startposition des Autos
+            speed_counter <= 0; // Zähler zurücksetzen
+        end else begin
+            if (speed_counter == 21'd2_000_000) begin // Beispielwert für langsame Bewegung
+                speed_counter <= 0; // Zähler zurücksetzen
 
-    // Zeichne das Smiley-Gesicht mit einer Zunge, die den Mund berührt
-    wire smiley_face;
-    assign smiley_face = (
-        ((pix_y >= 140 && pix_y <= 145) && (pix_x == 180 || pix_x == 270)) || // Augen
-        ((pix_y == 170) && (pix_x >= 210 && pix_x <= 240)) ||                // Trauriger Mund
-        ((pix_y >= 170 && pix_y <= 185) && (pix_x >= 220 && pix_x <= 230))   // Zunge, die den Mund berührt
-    );
+                if (ui_in[0]) // Wenn Pin 0 auf high
+                    car_pos_x <= car_pos_x - 1; // Bewege nach links
+                else if (ui_in[1]) // Wenn Pin 1 auf high
+                    car_pos_x <= car_pos_x + 1; // Bewege nach rechts
+            end else begin
+                speed_counter <= speed_counter + 1; // Zähler erhöhen
+            end
+        end
+    end
 
-    // Zeichne den Körper ohne Füllung
-    wire cat_body;
-    assign cat_body = (
-        ((pix_y == 201 || pix_y == 300) && (pix_x >= 170 && pix_x <= 280)) || // obere und untere Linie des Körpers
-        ((pix_y >= 201 && pix_y <= 300) && (pix_x == 170 || pix_x == 280))    // linke und rechte Linie des Körpers
-    );
+    // Auto und weiße Straße darstellen
+    // Auto besteht aus einem rechteckigen Körper und zwei Rädern
+    wire car_body = (pix_x >= car_pos_x) && (pix_x < car_pos_x + 40) && (pix_y >= 110) && (pix_y < 130);
+    wire car_wheel1 = (pix_x >= car_pos_x + 5) && (pix_x < car_pos_x + 15) && (pix_y >= 130) && (pix_y < 140);
+    wire car_wheel2 = (pix_x >= car_pos_x + 25) && (pix_x < car_pos_x + 35) && (pix_y >= 130) && (pix_y < 140);
 
-    // Zeichne die Beine der Katze und trenne sie mit einem Strich
-    wire cat_legs;
-    assign cat_legs = (
-        ((pix_y >= 301 && pix_y <= 350) && (pix_x == 190 || pix_x == 260)) || // linkes und rechtes Bein
-        ((pix_y == 350) && (pix_x >= 190 && pix_x <= 260)) ||                 // untere Linie an den Beinen
-        (pix_y >= 301 && pix_y <= 350 && pix_x == 225)                        // Trennstrich zwischen den Beinen
-    );
+    wire road_line = (pix_y >= 145) && (pix_y < 150); // Weiße Linie der Straße
 
-    // Zeichne die Arme
-    wire cat_arms;
-    assign cat_arms = (
-        ((pix_y >= 210 && pix_y <= 230) && (pix_x == 160)) ||    // linker Arm nach unten
-        ((pix_y == 210) && (pix_x >= 160 && pix_x <= 180)) ||   // Winken mit dem linken Arm
-        ((pix_y >= 210 && pix_y <= 230) && (pix_x == 290))      // rechter Arm nach oben
-    );
+    // Logik, um sicherzustellen, dass das Auto angezeigt wird
+    wire car_on = car_body || car_wheel1 || car_wheel2;
 
-    // Farbeinstellungen
-    assign R = (video_active && (cat_outline || smiley_face || cat_body || cat_legs || cat_arms)) ? 2'b11 : 2'b00; // Rot auf max
-    assign G = (video_active && (cat_outline || smiley_face || cat_body || cat_legs || cat_arms)) ? 2'b11 : 2'b00; // Grün auf max
-    assign B = (video_active && (cat_outline || smiley_face || cat_body || cat_legs || cat_arms)) ? 2'b11 : 2'b00; // Blau auf max
-
-    // Unterdrücke Warnungen für ungenutzte Signale
-    wire _unused_ok = &{ena, ui_in, uio_in};
+    assign R = video_active ? (car_on ? 2'b11 : (road_line ? 2'b11 : 2'b00)) : 2'b00;
+    assign G = video_active ? (car_on ? 2'b00 : (road_line ? 2'b11 : 2'b00)) : 2'b00;
+    assign B = video_active ? (car_on ? 2'b00 : (road_line ? 2'b11 : 2'b00)) : 2'b00;
 
 endmodule
